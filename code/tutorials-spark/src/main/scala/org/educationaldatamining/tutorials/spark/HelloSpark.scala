@@ -1,5 +1,14 @@
 package org.educationaldatamining.tutorials.spark
 
+/**
+	* Copyright (C) 2016 Tristan Nixon <tristan.m.nixon@gmail.com>
+	*
+	* This work is licensed under the Creative Commons Attribution-ShareAlike 4.0 International License.
+	* To view a copy of this license, visit http://creativecommons.org/licenses/by-sa/4.0/.
+	*
+	* This legend must continue to appear in the source code despite modifications or enhancements by any party.
+	*/
+
 import org.apache.spark.SparkContext
 
 /**
