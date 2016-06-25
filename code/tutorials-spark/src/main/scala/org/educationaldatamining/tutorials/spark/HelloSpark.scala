@@ -24,7 +24,7 @@ object HelloSpark
 		val sc = new SparkContext
 
 		// load moby dick
-		val md = sc.textFile("Moby Dick.txt")
+		val md = sc.textFile("./data/Moby Dick.txt")
 
 		// how many lines do we have?
 		md.count()
