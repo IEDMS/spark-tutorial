@@ -1,0 +1,13 @@
+// import a couple things
+import org.educationaldatamining.spark.bkt._
+import org.apache.spark.ml.util.Identifiable
+
+// Let's set up a BKT model with some reasonable parameters
+val bkt = new BKTModel( Identifiable.randomUID("Find Y BKT") ).setStudentResultsCol("Results").setPInit( 0.3 ).setPLearn( 0.2 ).setPGuess( 0.15 ).setPSlip( 0.2 )
+
+// run BKT on the data
+val predicted = bkt.transform( studentResults )
+
+// evaluate the model
+val bktEval = new BKTEvaluator().setStudentResultsCol("Results")
+bktEval.evaluate(predicted)

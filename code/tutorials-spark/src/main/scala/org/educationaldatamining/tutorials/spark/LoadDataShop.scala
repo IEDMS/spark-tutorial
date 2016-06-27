@@ -22,12 +22,16 @@ object LoadDataShop
 		// set up our spark context
 		val sc = new SparkContext
 		val sqlContext = new SQLContext(sc)
-
 		// import implicit functions defined for SQL
 		import sqlContext.implicits._
 
 		// load the datashop sample
-		val ds607 = sqlContext.read.format("com.databricks.spark.csv").option("header", "true").option("inferSchema", "true").option("delimiter","\t").option("quote", null).load("./data/ds607_tx_CTA1_01-4.tsv")
+		val ds607 = sqlContext.read.format("com.databricks.spark.csv")
+			.option("header", "true")
+			.option("inferSchema", "true")
+			.option("delimiter","\t")
+			.option("quote", null)
+			.load("./data/ds607_tx_CTA1_01-4.tsv")
 
 		// look at the schema
 		ds607.printSchema()
@@ -36,17 +40,21 @@ object LoadDataShop
 		// let's restore some relational sanity to this data...
 
 		// lets first break out the KTraced skills into separate dataframes:
-		val kc1 = ds607.select( $"Transaction ID".as("Transaction_ID"), $"KC (KTracedSkills)-1".as("kc") )
-		val kc2 = ds607.select( $"Transaction ID".as("Transaction_ID"), $"KC (KTracedSkills)-2".as("kc") )
-		val kc3 = ds607.select( $"Transaction ID".as("Transaction_ID"), $"KC (KTracedSkills)-3".as("kc") )
+		val kc1 = ds607.select( $"Transaction ID".as("Transaction_ID"), $"KC (KTracedSkills)-1".as("KC") )
+		val kc2 = ds607.select( $"Transaction ID".as("Transaction_ID"), $"KC (KTracedSkills)-2".as("KC") )
+		val kc3 = ds607.select( $"Transaction ID".as("Transaction_ID"), $"KC (KTracedSkills)-3".as("KC") )
 		// now merge them all together:
 		val kc = kc1.unionAll( kc2 ).unionAll( kc3 ).filter( $"kc" !== "" ).distinct
 
 		// how many KCs do we have?
-		kc.select( $"kc" ).distinct.count
+		kc.select( $"KC" ).distinct.count
 
 		// ok - let's drop some columns we don't care about:
-		val dropcols = Seq( "Row", "Sample Name", "Student Response Type", "Student Response Subtype", "Tutor Response Subtype")
+		val dropcols = Seq( "Row",
+		                    "Sample Name",
+		                    "Student Response Type",
+		                    "Student Response Subtype",
+		                    "Tutor Response Subtype")
 		val keepcols = ds607.columns.filter( colname => ! colname.startsWith("KC") && ! dropcols.contains( colname ) )
 		// we'll need to get rid of illegal column characters
 		val fixcols = keepcols.map( str => (str, str.replaceAll("\\s+","_").replaceAll("[\\(\\)]","") ) )
