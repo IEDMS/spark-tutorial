@@ -14,7 +14,7 @@ import org.apache.spark.ml.Model
 import org.apache.spark.ml.param.ParamMap
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types._
 import org.educationaldatamining.spark.ml.hmm.LogProb
 
 /**
@@ -23,7 +23,7 @@ import org.educationaldatamining.spark.ml.hmm.LogProb
 	* Created by Tristan Nixon <tristan.m.nixon@gmail.com> on 6/14/16.
 	*/
 class BKTModel(override val uid: String)
-	extends Model[BKTModel] with BKTParams
+	extends Model[BKTModel] with BKTParams with BKTColumnParams
 {
 	/** Setters for BKT parameters **/
 
@@ -46,22 +46,25 @@ class BKTModel(override val uid: String)
 	/** Setters for column names **/
 
 	/** @group setParam **/
-	def setOppsCol( value: String ): BKTModel = set(oppsCol, value)
+	def setStudentResultsCol( value: String ): BKTModel = set( resultsCol, value )
 
 	/** @group setParam **/
 	def setPCorrectCol( value: String ): BKTModel = set(pCorrectCol, value)
+	setDefault( pCorrectCol -> "PCorrect" )
 
 	/** @group setParam **/
 	def setPKnownCol( value: String ): BKTModel = set(pKnownCol, value)
+	setDefault( pKnownCol -> "PKnown" )
 
 	/** PCorrect & PKnown implementations **/
 
 	/**
 		* Update the PKnown estimate based on observed behavior
+		*
 		* @param correct whether or not the observed behavior was correct
 		* @param prior the prior estimate of PKnown
 		*/
-	private[bkt] def updatePKnown(correct: Boolean, prior: Double ): Double =
+	private[bkt] def updatePKnown( correct: Boolean, prior: Double ): Double =
 	{
 		// log-transform some values
 		val known = new LogProb(prior)
@@ -92,7 +95,7 @@ class BKTModel(override val uid: String)
 		* @param observed
 		* @return
 		*/
-	private[bkt] def pKnown( observed: Array[Boolean] ): Array[Double] =
+	private[bkt] def pKnown( observed: Seq[Boolean] ): Seq[Double] =
 	{
 		// start with our initial probability of knowledge
 		val pK = new Array[Double]( observed.length + 1 )
@@ -109,7 +112,7 @@ class BKTModel(override val uid: String)
 		* @param pKnown
 		* @return
 		*/
-	private[bkt] def pCorrect( observed: Array[Boolean], pKnown: Array[Double] ): Array[Double] =
+	private[bkt] def pCorrect( observed: Seq[Boolean], pKnown: Seq[Double] ): Seq[Double] =
 	{
 		val noSlip = LogProb.ONE - new LogProb(getPSlip)
 		val guessed = new LogProb(getPGuess)
@@ -132,21 +135,35 @@ class BKTModel(override val uid: String)
 	}
 
 	@DeveloperApi
-	override def transformSchema(schema: StructType): StructType = validateAndTransformSchema(schema)
+	override def transformSchema(schema: StructType): StructType =
+	{
+		// make sure the schema provides the specified opps column
+		require( schema.fieldNames.contains( $( resultsCol ) ), "The DataFrame must have a column named "+ $( resultsCol ) )
+		val colType = schema($( resultsCol ) ).dataType
+		require( colType.equals( resultsType ),
+		         "Column "+ $( resultsCol ) +" must be of type "+ resultsType +", but is actually "+ colType )
+		// add the result columns
+		require( !schema.fieldNames.contains($(pCorrectCol)), "Result column "+ $(pCorrectCol) +" already exists!")
+		require( !schema.fieldNames.contains($(pKnownCol)), "Result column "+ $(pKnownCol) +" already exists!")
+		StructType( schema.fields :+
+			          StructField( $(pKnownCol), pKnownType ) :+
+			          StructField( $(pCorrectCol), pCorrectType ) )
+	}
 
 	override def transform(dataset: DataFrame): DataFrame =
 	{
 		transformSchema( dataset.schema, true )
 		// throw warning if PCorrect, PKnown not set
-		if( $(pCorrectCol).isEmpty || $(pKnownCol).isEmpty )
+		if( $(pCorrectCol).isEmpty || $(pKnownCol).isEmpty ){
 			logWarning( uid +": BKTModel.transform was called as a NOOP since the pCorrect or pKnown column names are not set!")
+			dataset
+		}
 		else {
 			// run the model on the opportunities
-			val pK = udf { (opps: Array[Boolean]) => pKnown(opps) }
-			val pC = udf { (opps: Array[Boolean], pK: Array[Double]) => pCorrect(opps,pK) }
-			dataset.withColumn( $(pKnownCol), pK( column($(oppsCol)) ) )
-			dataset.withColumn( $(pCorrectCol), pC( column($(oppsCol)), column($(pKnownCol)) ) )
+			val pkUDF = udf { (res: Seq[Boolean] ) => pKnown( res ) }
+			val pcUDF = udf { (res: Seq[Boolean], pK: Seq[Double] ) => pCorrect( res, pK ) }
+			dataset.withColumn( $(pKnownCol), pkUDF( col($(resultsCol)) ) )
+				     .withColumn( $(pCorrectCol), pcUDF( col($(resultsCol)), col($(pKnownCol)) ) )
 		}
-		dataset
 	}
 }
