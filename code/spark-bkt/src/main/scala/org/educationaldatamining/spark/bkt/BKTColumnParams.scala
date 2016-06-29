@@ -25,7 +25,7 @@ trait BKTColumnParams extends Params
 		* @group param
 		*/
 	final val resultsCol: Param[String] = new Param[String]( this, "resultsCol", "Name of the column containing the student results data" )
-	protected final val resultsType = new ArrayType( BooleanType, true )
+	protected final val resultsType = new ArrayType( DoubleType, true )
 
 	/** Output columns: predicted values **/
 
@@ -53,4 +53,24 @@ trait BKTColumnParams extends Params
 
 	/** @group getParam **/
 	final def getPKnownCol = $(pKnownCol)
+
+	/**
+		*
+		* @param schema
+		* @return
+		*/
+	protected def validateAndTransformSchema(schema: StructType): StructType =
+	{
+		// make sure the schema provides the specified opps column
+		require( schema.fieldNames.contains( $( resultsCol ) ), "The DataFrame must have a column named "+ $( resultsCol ) )
+		val colType = schema($( resultsCol ) ).dataType
+		require( colType.equals( resultsType ),
+		         "Column "+ $( resultsCol ) +" must be of type "+ resultsType +", but is actually "+ colType )
+		// add the result columns
+		require( !schema.fieldNames.contains($(pCorrectCol)), "Result column "+ $(pCorrectCol) +" already exists!")
+		require( !schema.fieldNames.contains($(pKnownCol)), "Result column "+ $(pKnownCol) +" already exists!")
+		StructType( schema.fields :+
+			            StructField( $(pKnownCol), pKnownType ) :+
+			            StructField( $(pCorrectCol), pCorrectType ) )
+	}
 }

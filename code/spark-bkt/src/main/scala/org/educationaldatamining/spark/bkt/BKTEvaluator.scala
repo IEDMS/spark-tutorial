@@ -107,8 +107,7 @@ class BKTEvaluator(override val uid: String)
 		// ok - now let's evaluate our pCorrect estimates
 		// first unpack each sequence of boolean observations and Double pCorrect values
 		// and line them up in (predicted, lable) pairs
-		val bool2Dbl = udf{ (res: Seq[Boolean]) => res.map( if(_) 1.0 else 0.0 ) }
-		val predLab = dataset.select( col($(pCorrectCol)), bool2Dbl( col($(resultsCol)) ) )
+		val predLab = dataset.select( col($(pCorrectCol)), col($(resultsCol)) )
 			.flatMap( { case Row( pCor: Seq[Double], res: Seq[Double] ) => pCor.zip(res) } )
 		// instantiate regression metrics instance:
 		val metrics = new RegressionMetrics(predLab)

@@ -58,6 +58,15 @@ class BKTModel(override val uid: String)
 
 	/** PCorrect & PKnown implementations **/
 
+	private[bkt] def isCorrect( value: Double ):Boolean =
+	{
+		value match {
+			case (1.0) => true
+			case (0.0) => false
+			case _ => throw new IllegalArgumentException("Results values must be either 0.0 or 1.0")
+		}
+	}
+
 	/**
 		* Update the PKnown estimate based on observed behavior
 		*
@@ -67,26 +76,30 @@ class BKTModel(override val uid: String)
 	private[bkt] def updatePKnown( correct: Boolean, prior: Double ): Double =
 	{
 		// log-transform some values
-		val known = new LogProb(prior)
-		val unknown = LogProb.ONE - known
+		val priorKnown = new LogProb(prior)
+		val priorUnknown = LogProb.ONE - priorKnown
 		val guessed = new LogProb(getPGuess)
 		val slipped = new LogProb(getPSlip)
 
-		// apply learning rate to a posterior PKnown
-		def learn( posterior: LogProb ): LogProb = posterior + (LogProb.ONE - posterior) * new LogProb(getPLearn)
-
-		// we update the probability based on observed correctness
-		if( correct ){
-			// two ways of getting a correct result:
-			val pKnewIt = known * (LogProb.ONE - slipped) // prob. student actually knew the answer
-			val pGuessedIt = unknown * guessed // prob. student guessed correctly
-			learn( pKnewIt / ( pKnewIt +  pGuessedIt ) ).asProb
-		} else {
-			// two ways of getting an incorrect result:
-			val pSlippedUp = known * slipped // student knew the answer, but slipped
-			val pDidntKnowIt = unknown * (LogProb.ONE - guessed) // didn't know it, and didn't guess
-			learn( pSlippedUp / ( pSlippedUp + pDidntKnowIt ) ).asProb
+		// probability that the student knows the skill, given the observation
+		// depends on whether or not they slipped
+		val pKnewIt = correct match {
+			case true => priorKnown * (LogProb.ONE - slipped) // student knew it and didn't slip
+			case false => priorKnown * slipped // student knew the answer, but slipped
 		}
+
+		// probabilty that the student didn't know the skill, given the observation
+		// hinges on whether or not they guessed
+		val pDidntKnowIt = correct match {
+			case true => priorUnknown * guessed // student didn't know it, but guessed
+			case false => priorUnknown * (LogProb.ONE - guessed) // didn't know it, and didn't guess
+		}
+
+		// what's the full probabilty that they knew the skill?
+		val posteriorKnown = pKnewIt / ( pKnewIt + pDidntKnowIt )
+
+		// and then there's some chance that they just learned it now
+		( posteriorKnown + (LogProb.ONE - posteriorKnown) * new LogProb(getPLearn)).asProb
 	}
 
 	/**
@@ -95,35 +108,34 @@ class BKTModel(override val uid: String)
 		* @param observed
 		* @return
 		*/
-	private[bkt] def pKnown( observed: Seq[Boolean] ): Seq[Double] =
+	private[bkt] def pKnown( observed: Seq[Double] ): Seq[Double] =
 	{
 		// start with our initial probability of knowledge
 		val pK = new Array[Double]( observed.length + 1 )
 		pK(0) = getPInit
 		// update pKnown based o prior value and observed
 		for( i <- observed.indices )
-			pK(i + 1) = updatePKnown( observed(i), pK(i) )
+			pK(i + 1) = updatePKnown( isCorrect(observed(i)), pK(i) )
 		pK
 	}
 
 	/**
 		*
-		* @param observed
 		* @param pKnown
 		* @return
 		*/
-	private[bkt] def pCorrect( observed: Seq[Boolean], pKnown: Seq[Double] ): Seq[Double] =
+	private[bkt] def pCorrect( pKnown: Seq[Double] ): Seq[Double] =
 	{
 		val noSlip = LogProb.ONE - new LogProb(getPSlip)
 		val guessed = new LogProb(getPGuess)
 
 		// correct behavior comes from knowing and not slipping
 		// or not knowing, but successfully guessing
-		def pC( obs: Boolean, pK: LogProb ): Double =
+		def pC( pK: LogProb ): Double =
 			( ( pK * noSlip ) + ( (LogProb.ONE - pK) * guessed ) ).asProb
 
-		// apply it to all (observation, pKnown) pairs
-		observed.zip( pKnown.map( new LogProb(_) ) ).map( ok => pC( ok._1, ok._2) )
+		// apply it to all pKnown values
+		pKnown.map( new LogProb(_) ).map( pC(_) )
 	}
 
 	/** implement Model methods **/
@@ -135,20 +147,7 @@ class BKTModel(override val uid: String)
 	}
 
 	@DeveloperApi
-	override def transformSchema(schema: StructType): StructType =
-	{
-		// make sure the schema provides the specified opps column
-		require( schema.fieldNames.contains( $( resultsCol ) ), "The DataFrame must have a column named "+ $( resultsCol ) )
-		val colType = schema($( resultsCol ) ).dataType
-		require( colType.equals( resultsType ),
-		         "Column "+ $( resultsCol ) +" must be of type "+ resultsType +", but is actually "+ colType )
-		// add the result columns
-		require( !schema.fieldNames.contains($(pCorrectCol)), "Result column "+ $(pCorrectCol) +" already exists!")
-		require( !schema.fieldNames.contains($(pKnownCol)), "Result column "+ $(pKnownCol) +" already exists!")
-		StructType( schema.fields :+
-			          StructField( $(pKnownCol), pKnownType ) :+
-			          StructField( $(pCorrectCol), pCorrectType ) )
-	}
+	override def transformSchema(schema: StructType): StructType = validateAndTransformSchema(schema)
 
 	override def transform(dataset: DataFrame): DataFrame =
 	{
@@ -160,10 +159,10 @@ class BKTModel(override val uid: String)
 		}
 		else {
 			// run the model on the opportunities
-			val pkUDF = udf { (res: Seq[Boolean] ) => pKnown( res ) }
-			val pcUDF = udf { (res: Seq[Boolean], pK: Seq[Double] ) => pCorrect( res, pK ) }
+			val pkUDF = udf { (res: Seq[Double] ) => pKnown( res ) }
+			val pcUDF = udf { ( pK: Seq[Double] ) => pCorrect( pK ) }
 			dataset.withColumn( $(pKnownCol), pkUDF( col($(resultsCol)) ) )
-				     .withColumn( $(pCorrectCol), pcUDF( col($(resultsCol)), col($(pKnownCol)) ) )
+				     .withColumn( $(pCorrectCol), pcUDF( col($(pKnownCol)) ) )
 		}
 	}
 }
