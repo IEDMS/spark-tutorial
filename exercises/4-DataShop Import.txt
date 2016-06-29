@@ -1,0 +1,40 @@
+
+// load the datashop sample
+val ds607 = sqlContext.read.format("com.databricks.spark.csv").option("header", "true").option("inferSchema", "true").option("delimiter","\t").option("quote", null).load( "./data/ds607_tx_CTA1_01-4.tsv" )
+
+// look at the first few rows
+ds607.show
+
+// look at the schema
+ds607.printSchema()
+
+// ugh - skills are scattered across several columns!
+// let's restore some relational sanity to this data...
+
+// lets first break out the KTraced skills into separate dataframes:
+val kc1 = ds607.select( $"Transaction ID".as("Transaction_ID"), $"KC (KTracedSkills)-1".as("KC") )
+val kc2 = ds607.select( $"Transaction ID".as("Transaction_ID"), $"KC (KTracedSkills)-2".as("KC") )
+val kc3 = ds607.select( $"Transaction ID".as("Transaction_ID"), $"KC (KTracedSkills)-3".as("KC") )
+// now merge them all together:
+val kc = kc1.unionAll( kc2 ).unionAll( kc3 ).filter( $"kc" !== "" ).distinct
+
+// how many KCs do we have?
+kc.select( $"KC" ).distinct.count
+
+// ok - let's drop some columns we don't care about:
+val keepcols = ds607.columns.filter( colname => ! colname.startsWith("KC") )
+// we'll need to get rid of illegal column characters
+val fixcols = keepcols.map( str => (str, str.replaceAll("\\s+","_").replaceAll("[\\(\\)]","") ) )
+
+// our transactions!
+val tx = ds607.select( fixcols.map( fix => ds607.col(fix._1).as(fix._2) ): _* )
+
+// let's have a look at our new schema:
+tx.printSchema()
+
+// save to CSV...
+tx.write.format("com.databricks.spark.csv").option("header", "true").option("quote", null).save("./data/tx-csv")
+
+// save to parquet files
+kc.write.save("./data/kc_CTA1_01-4")
+tx.write.save("./data/tx_CTA1_01-4")

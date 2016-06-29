@@ -1,0 +1,4 @@
+// Syntax for spark-submit:
+// spark-submit --master <MASTER URL> --class <APP CLASS TO RUN>  <APP JAR TO SUBMIT> <ARGS TO APP>
+
+spark-submit --master local[*] --class org.educationaldatamining.tutorials.spark.HelloSpark tutorials.spark-1.0-SNAPSHOT.jar ./data/Moby\ Dick.txt

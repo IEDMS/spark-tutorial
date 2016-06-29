@@ -31,7 +31,10 @@ object LoadDataShop
 			.option("inferSchema", "true")
 			.option("delimiter","\t")
 			.option("quote", null)
-			.load("./data/ds607_tx_CTA1_01-4.tsv")
+			.load( args(0) )
+
+		// look at the first few rows
+		ds607.show
 
 		// look at the schema
 		ds607.printSchema()
@@ -50,12 +53,7 @@ object LoadDataShop
 		kc.select( $"KC" ).distinct.count
 
 		// ok - let's drop some columns we don't care about:
-		val dropcols = Seq( "Row",
-		                    "Sample Name",
-		                    "Student Response Type",
-		                    "Student Response Subtype",
-		                    "Tutor Response Subtype")
-		val keepcols = ds607.columns.filter( colname => ! colname.startsWith("KC") && ! dropcols.contains( colname ) )
+		val keepcols = ds607.columns.filter( colname => ! colname.startsWith("KC") )
 		// we'll need to get rid of illegal column characters
 		val fixcols = keepcols.map( str => (str, str.replaceAll("\\s+","_").replaceAll("[\\(\\)]","") ) )
 
@@ -64,6 +62,12 @@ object LoadDataShop
 
 		// let's have a look at our new schema:
 		tx.printSchema()
+
+		// save to CSV...
+		tx.write.format("com.databricks.spark.csv")
+			.option("header", "true")
+			.option("quote", null)
+			.save("./data/tx-csv")
 
 		// save to parquet files
 		kc.write.save("./data/kc_CTA1_01-4")

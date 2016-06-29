@@ -18,52 +18,60 @@ import org.apache.spark.SparkContext
 	*/
 object HelloSpark
 {
+	def toLines[T]( array: Array[T] ): String = array.addString(new StringBuilder, "\n").toString()
+
 	def main( args: Array[String] )
 	{
 		// set up our spark context
 		val sc = new SparkContext
 
 		// load moby dick
-		val md = sc.textFile("./data/Moby Dick.txt")
+		val md = sc.textFile( args(0) )
 
 		// how many lines do we have?
-		md.count()
+		println("=> Moby Dick has "+ md.count() +" lines")
 
 		// what's the first line say?
-		md.first
+		println("=> It's first line is: '"+ md.first +"'")
 
 		// let's take a quick look at the first 20 lines
-		md.take(20)
+		println("=> It's first 20 lines are: "+ toLines( md.take(20) ) )
 
 		// how many lines mention the narrator, Ishmael?
-		md.filter( line => line.contains("Ishmael") ).count
+		println("=> 'Ishmael' occurs on "+ md.filter( line => line.contains("Ishmael") ).count +" lines:")
 
 		// let's look at them:
-		md.filter( _.contains("Ishmael") ).collect().addString( new StringBuilder, "\n" )
+		print( toLines( md.filter( _.contains("Ishmael") ).collect() ) )
 
 		// how many lines mention Ahab?
-		md.filter( _.contains("Ahab") ).count
+		println("=> 'Ahab' occurs on "+ md.filter( _.contains("Ahab") ).count +" lines")
 
 		// how many lines mention the whale?
-		md.filter( _.toLowerCase.contains("whale") ).count
+		println("=> 'whale' occurs on "+ md.filter( _.toLowerCase.contains("whale") ).count +" lines")
 
 		// let's count all the words!
 		val words = md.flatMap( _.toLowerCase.split("\\W+") ) // this is totally the wrong way to tokenize text, but convenient
 
 		// how many words are there in Moby Dick?
-		words.count
+		println("=> Moby Dick has "+ words.count +" words")
 
 		// your first MapReduce implementation!
 		val wordCounts = words.map( word => (word,1) ).reduceByKey( (a, b) => a + b ).cache
 
 		// let's peak at some results:
-		wordCounts.take(10)
+		println("=> Some word counts: "+ toLines( wordCounts.take(10) ) )
 
 		// how many distinct words do we have?
-		wordCounts.count
+		println("=> Total of "+ wordCounts.count +" distinct words.")
 
 		// What are the top 10 most frequently used words?
-		wordCounts.sortBy( _._2, false ).take(10)
+		println("=> The top 10 are: "+ toLines( wordCounts.sortBy( _._2, false ).take(10) ) )
+
+		// how many total instances of Ahab are there?
+		println("=> 'Ahab' occurs: "+ toLines( wordCounts.filter( wc => wc._1.equalsIgnoreCase("Ahab") ).collect() ) )
+
+		// how many for the whale?
+		println("=> 'whale occurs: "+ toLines( wordCounts.filter( wc => wc._1.equalsIgnoreCase("whale") ).collect() ) )
 
 		// shut down our spark context
 		sc.stop
