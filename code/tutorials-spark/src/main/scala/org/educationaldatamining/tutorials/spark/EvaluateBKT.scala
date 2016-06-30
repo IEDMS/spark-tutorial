@@ -3,10 +3,17 @@ package org.educationaldatamining.tutorials.spark
 /**
 	* Copyright (C) 2016 Tristan Nixon <tristan.m.nixon@gmail.com>
 	*
-	* This work is licensed under the Creative Commons Attribution-ShareAlike 4.0 International License.
-	* To view a copy of this license, visit http://creativecommons.org/licenses/by-sa/4.0/.
+	* Licensed under the Apache License, Version 2.0 (the "License");
+	* you may not use this file except in compliance with the License.
+	* You may obtain a copy of the License at
 	*
-	* This legend must continue to appear in the source code despite modifications or enhancements by any party.
+	* http://www.apache.org/licenses/LICENSE-2.0
+	*
+	* Unless required by applicable law or agreed to in writing, software
+	* distributed under the License is distributed on an "AS IS" BASIS,
+	* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+	* See the License for the specific language governing permissions and
+	* limitations under the License.
 	*/
 
 import org.apache.spark.SparkContext
@@ -62,7 +69,8 @@ object EvaluateBKT
 		first_attempts.count()
 
 		// aggregate the outcomes into a vector of doubles:
-		val studentResults = first_attempts.groupBy( $"Section", $"KC", $"Student" ).agg( collect_list($"Result").as("Results") ).cache
+		val studentResults = first_attempts.groupBy( $"Section", $"KC", $"Student" )
+			.agg( collect_list($"Result").as("Results") ).cache
 
 		// let's do an 80-20 training/test split
 		val Array( train, test ) = studentResults.randomSplit( Array( 0.8, 0.2 ) )
@@ -95,9 +103,10 @@ object EvaluateBKT
 			.addGrid( bkt.pGuess, 0.1 until 0.5 by 0.1 )
 			.addGrid( bkt.pSlip, 0.1 until 0.5 by 0.1 )
 
+		val bktEst = new GivenParameterBKTEstimator().setStudentResultsCol("Results")
 		// and some cross-validation
 		val cv = new CrossValidator()
-			.setEstimator(new GivenParameterBKTEstimator())
+			.setEstimator(bktEst)
 			.setEvaluator(bktEval)
 			.setEstimatorParamMaps(pGrid.build())
 			.setNumFolds(4)

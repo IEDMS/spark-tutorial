@@ -2,25 +2,12 @@ package org.educationaldatamining.spark.bkt
 
 /**
 	* Copyright (C) 2016 Tristan Nixon <tristan.m.nixon@gmail.com>
-	* except segments copied/inspired from
-	* RegressionEvaluator.scala (revision 9e82273) available here:
-	* https://github.com/apache/spark/blob/v1.6.1/mllib/src/main/scala/org/apache/spark/ml/evaluation/RegressionEvaluator.scala
 	*
-	* This work is licensed under the Creative Commons Attribution-ShareAlike 4.0 International License.
-	* To view a copy of this license, visit http://creativecommons.org/licenses/by-sa/4.0/.
+	* Licensed under the Apache License, Version 2.0 (the "License");
+	* you may not use this file except in compliance with the License.
+	* You may obtain a copy of the License at
 	*
-	* This legend must continue to appear in the source code despite modifications or enhancements by any party.
-	*
-	* Segments copied/inspired from RegressionEvaluator are licensed under the Apache License, 2.0 as per the following:
-	*
-	* Licensed to the Apache Software Foundation (ASF) under one or more
-	* contributor license agreements.  See the NOTICE file distributed with
-	* this work for additional information regarding copyright ownership.
-	* The ASF licenses this file to You under the Apache License, Version 2.0
-	* (the "License"); you may not use this file except in compliance with
-	* the License.  You may obtain a copy of the License at
-	*
-	*    http://www.apache.org/licenses/LICENSE-2.0
+	* http://www.apache.org/licenses/LICENSE-2.0
 	*
 	* Unless required by applicable law or agreed to in writing, software
 	* distributed under the License is distributed on an "AS IS" BASIS,
