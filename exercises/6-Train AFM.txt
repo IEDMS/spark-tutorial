@@ -6,6 +6,7 @@ import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions._
 import org.apache.spark.mllib.linalg.{Vector, Vectors}
 import scala.collection.mutable.ListBuffer
+import org.educationaldatamining.tutorials.spark.VectorSum
 
 // load the data
 val kc = sqlContext.read.load("./data/kc_CTA1_01-4")
