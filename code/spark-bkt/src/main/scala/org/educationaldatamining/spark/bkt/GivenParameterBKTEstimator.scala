@@ -77,6 +77,9 @@ class GivenParameterBKTEstimator(override val uid: String)
 			.setPLearn( getPLearn )
 			.setPGuess( getPGuess )
 			.setPSlip( getPSlip )
+			.setStudentResultsCol( getStudentResultsCol)
+			.setPCorrectCol( getPCorrectCol )
+			.setPKnownCol( getPKnownCol )
 
 	@DeveloperApi
 	override def transformSchema(schema: StructType): StructType = validateAndTransformSchema(schema)

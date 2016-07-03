@@ -1,9 +1,36 @@
 // import a couple things
 import org.apache.spark.ml.tuning.{CrossValidator, ParamGridBuilder}
 import org.apache.spark.ml.util.Identifiable
-import org.apache.spark.sql.functions._
 import org.educationaldatamining.spark.bkt.{BKTEvaluator, BKTModel, GivenParameterBKTEstimator}
 
+// load the data
+val kc = sqlContext.read.load("./data/kc_CTA1_01-4")
+val tx = sqlContext.read.load("./data/tx_CTA1_01-4")
+
+// show the KCs
+kc.select( $"KC" ).distinct.show(false)
+
+// get the transactions for a given skill
+val findy = kc.filter( $"KC" === "Find Y, positive slope-1" ).join( tx, "Transaction_ID" )
+
+// how many transactions do we have?
+findy.count()
+
+// get the first-attempts for each student-problem-step
+val first_attempts = findy.filter( $"Attempt_At_Step" === 1 ).select( $"Level_Section".as("Section"), $"KC", $"Anon_Student_Id".as("Student"), $"Time", $"Problem_Name".as("Problem"), $"Step_Name".as("Step"), $"Outcome", when( $"Outcome" === "OK", 1.0 ).otherwise(0.0).as("Result") ).orderBy( $"Student", $"Time" )
+
+// have a look at our first attempts!
+first_attempts.show(false)
+
+// how many first attempts do we have?
+first_attempts.count()
+
+// aggregate the outcomes into a vector of doubles:
+val studentResults = first_attempts.groupBy( $"Section", $"KC", $"Student" ).agg( collect_list($"Result").as("Results") ).cache
+
+// let's look at these!
+studentResults.show(false)
+		
 // Let's set up a BKT model with some reasonable parameters
 val bkt = new BKTModel( Identifiable.randomUID("Find Y BKT") ).setStudentResultsCol("Results").setPInit( 0.3 ).setPLearn( 0.2 ).setPGuess( 0.15 ).setPSlip( 0.2 )
 
@@ -20,8 +47,14 @@ println( bktEval.getMetricName +" for the BKT model is: "+ bktEval.evaluate(pred
 // let's do a brute-force grid-search
 val pGrid = new ParamGridBuilder().addGrid( bkt.pInit, 0.1 until 1.0 by 0.1 ).addGrid( bkt.pLearn, 0.1 until 1.0 by 0.1 ).addGrid( bkt.pGuess, 0.1 until 0.5 by 0.1 ).addGrid( bkt.pSlip, 0.1 until 0.5 by 0.1 )
 
+// set up our estimator
+val bktEst = new GivenParameterBKTEstimator().setStudentResultsCol("Results")
+
 // and some cross-validation
-val cv = new CrossValidator().setEstimator(new GivenParameterBKTEstimator()).setEvaluator(bktEval).setEstimatorParamMaps(pGrid.build()).setNumFolds(4)
+val cv = new CrossValidator().setEstimator(bktEst).setEvaluator(bktEval).setEstimatorParamMaps(pGrid.build()).setNumFolds(4)
+
+// let's do an 80-20 training/test split
+val Array( train, test ) = studentResults.randomSplit( Array( 0.8, 0.2 ) )
 
 // fitting the cross-validator will now run a grid-search over BKT parameters
 val bfModel = cv.fit( train )

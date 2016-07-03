@@ -72,9 +72,6 @@ object EvaluateBKT
 		val studentResults = first_attempts.groupBy( $"Section", $"KC", $"Student" )
 			.agg( collect_list($"Result").as("Results") ).cache
 
-		// let's do an 80-20 training/test split
-		val Array( train, test ) = studentResults.randomSplit( Array( 0.8, 0.2 ) )
-
 		// let's look at these!
 		studentResults.show(false)
 
@@ -103,13 +100,18 @@ object EvaluateBKT
 			.addGrid( bkt.pGuess, 0.1 until 0.5 by 0.1 )
 			.addGrid( bkt.pSlip, 0.1 until 0.5 by 0.1 )
 
+		// set up our estimator
 		val bktEst = new GivenParameterBKTEstimator().setStudentResultsCol("Results")
+
 		// and some cross-validation
 		val cv = new CrossValidator()
 			.setEstimator(bktEst)
 			.setEvaluator(bktEval)
 			.setEstimatorParamMaps(pGrid.build())
 			.setNumFolds(4)
+
+		// let's do an 80-20 training/test split
+		val Array( train, test ) = studentResults.randomSplit( Array( 0.8, 0.2 ) )
 
 		// fitting the cross-validator will now run a grid-search over BKT parameters
 		val bfModel = cv.fit( train )
